@@ -1,0 +1,2 @@
+# Dynamical-system-for-constructing-cell-based-mechanisms-in-origami-and-kirigami-metamaterials
+A cell-based mechanism in a periodic metamaterial is a smooth family of rigid deformations composed of a shape-changing homogeneous part along with a periodic correction that preserves the rigidity of the polygonal panels or bars in the setup. We implement a solver for the dynamical system to which these mechanisms are solutions. 
