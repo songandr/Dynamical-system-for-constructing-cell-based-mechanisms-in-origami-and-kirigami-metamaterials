@@ -35,14 +35,68 @@ To run the program:
    - (Rigid panel origami only): Panel labeling cell array $P_j$ where the $j$-th cell holds node indices of the $j$-th panel.
    - Parameters: integration time $T$ and boolean "reverse" to initialize the opposite mechanism motion.
 2. Construct:
-   - Null space matrix $N$ as N = null(L_0) for 2D structures or null(L) for 3D structures.
-   - Mapping matrix $X$ or $Y$ using constructX(x) for 2D structures or constructY(x,"group") for 3D structures.
-   - Initial stiffness tensor $C_0$ using effectiveC(x,X,N,B) for rigid bar structures or membraneStiffness(x,Pj,L,dim,"group") for rigid panel structures.
+   - Null space matrix $N$ as
+     ```matlab
+     N = null(L_0);
+     ```
+     for 2D structures or
+     ```matlab
+     N = null(L);
+     ```
+     for 3D structures.
+   - Mapping matrix $X$ or $Y$ using
+     ```matlab
+     X = constructX(x);
+     ```
+     for 2D structures or
+     ```matlab
+     Y = constructY(x,"group");
+     ```
+     for 3D structures.
+   - Initial stiffness tensor $C_0$ using
+     ```matlab
+     C_0 = effectiveC(x,X,N,B);
+     ```
+     for rigid bar structures or
+     ```matlab
+     C_0 = membraneStiffness(x,Pj,L,dim,"group")
+     ```
+     for rigid panel structures.
 3. Check initialization:
-   - Confirm there are no Guest-Hutchinson modes before integrating by calling eig(GH_0) for K = barStiffness(x,B); GH_0 = N'*K*N for rigid bar structures or [~,~,GH0] = membraneStiffness(x,Pj,L,dim,"group") for rigid panel structures. If there is a zero eigenvalue you must choose a different initialization.
+   - Confirm there are no Guest-Hutchinson modes before integrating by calling
+     ```matlab
+     K = barStiffness(x,B);
+     GH_0 = N'*K*N;
+     eig(GH_0);
+     ```
+     for rigid bar structures or
+     ```matlab
+     [~,~,GH0] = membraneStiffness(x,Pj,L,dim,"group")
+     ```
+     for rigid panel structures. If there is a zero eigenvalue you must choose a different initialization.
 4. Prepare to integrate:
-   - Use state_0 = [e_0; x] and pass the parameters pars.B = B, pars.N = N, and for rigid bar structures: pars.X = X, pars.l_0 = [$\mathbf{l}_1$, $\mathbf{l}_2$] for lattice vectors $\mathbf{l}_k$, and pars.boundary_pairs = [i_1, i_1'; i_2, i_2'] which indicate the corresponding node indices to the lattice vectors defined for l_0. For rigid panel structures, instead pass: pars.X = Y (for rigid panels), pars.L = L, pars.Pj = Pj, pars.dim = dim, and pars.group = "group".
+   - Use
+     ```matlab
+     state_0 = [e_0; x]
+     ```
+     and pass the parameters
+     ```matlab
+     pars.B = B; pars.N = N
+     ```
+     and for rigid bar structures:
+     ```matlab
+     pars.X = X, pars.l_0 = [l_1, l_2]
+     ```
+     for lattice vectors $\mathbf{l}_k$, and
+     ```matlab
+     pars.boundary_pairs = [i_1, i_1'; i_2, i_2']
+     ```
+     which indicate the corresponding node indices to the lattice vectors defined for pars.l_0. For rigid panel structures, instead pass:
+     ```matlab
+     pars.X = Y; pars.L = L; pars.Pj = Pj; pars.dim = dim; pars.group = "group"
+     ```
 5. Integrate by calling:
-  options = odeset('Events', @(t,state) combinedEvents(t, state, pars));
-  [t,state,te,ye,ie] = ode45(@(t,state) mechanismODE(t,state,pars),...
-                           [0,T],state_0,options); 
+   ```matlab
+   options = odeset('Events', @(t,state) combinedEvents(t, state, pars));
+   [t,state,te,ye,ie] = ode45(@(t,state) mechanismODE(t,state,pars),[0,T],state_0,options);
+   ```
