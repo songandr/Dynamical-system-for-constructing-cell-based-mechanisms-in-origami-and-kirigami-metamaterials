@@ -8,7 +8,7 @@
 % Under the Supervision of Dr. Paul Plucinsky
 % Viterbi School of Engineering, Unversity of Southern California 
 %
-% Updated Date: 08/18/26.
+% Updated Date: 08/31/26.
 %
 % These tests are interested in the mechanism motion of:
 % 1. a 4 bar quad unit cell (1 DoF mechanism)
@@ -27,12 +27,16 @@ clc
 cla
 
 % User-defined inputs
-tessellate = 1; % 2x2 unit cell tessellation for plotting
-snapshotPlots = 1;
+tol = 10^(-15);
+plotMechanism = 1; % for mechanism animation
+tessellate = 0; % 2x2 unit cell tessellation for plotting
+snapshotPlots = 0;
 eigPlot = 1;
-energyPlot = 0;
+energyPlot = 1;
+strainPlot = 0;
+residualCheck = 1;
 reverse = 0; % default setting; some tests flip initial eigenvector sign for desired mechanism motion
-test = 8; % 1: 1x1 square lattice (simplest mechanism test)
+test = 1; % 1: 1x1 square lattice (simplest mechanism test)
           % 2: 2x2 quad lattice (dynamics can't run unless perturbed center)
           % 3: 2x2 rotating squares (kirigami mechanism test)
           % 4: 1x1 twisted Kagome lattice (GH mode at most open state)
@@ -40,17 +44,21 @@ test = 8; % 1: 1x1 square lattice (simplest mechanism test)
           % 6: nxn parallelogram origami (general quad origami)
           % 7: eggbox origami
           % 8: "Morph" origami
-
+    
 % x is the IC of y, a column vector of length 2I holding nodal positions
 if test == 1 % 1x1 square lattice
     reverse = 1;
-    theta = 0.01*(pi/2); % pi/2 corresponds to the square state & 0 the flat state
-    T = 126.35; % PSD threshold crossed at t = 126.354561
+    %theta = 0.01*(pi/2); % pi/2 corresponds to the square state & 0 the flat state
+    %T = 126.35; % PSD threshold crossed at t = 126.354561
+    reverse = 0;
+    theta = 1*(pi/2);
+    T = 1;
     x = [0 0;
          1 0;
          1+cos(theta) sin(theta);
          cos(theta) sin(theta)];
     x = reshape(x',[],1);
+    x(abs(x)<tol) = 0;
     
     % B is an array of node indices connected by bars
     B = [1 2;
@@ -66,19 +74,47 @@ if test == 1 % 1x1 square lattice
     L_0 = periodicityMatrix(B_k, 4, 2);
 
 elseif test == 2 % 2x2 square lattice
+    epsilon = zeros(9, 2); % symmetric case
+    epsilon(5,:) = [0.25 0.4]; % perturbed case
+    %epsilon = [-0.2 0.3];
 
+    % line shifted case 1
+    %{
+    epsilon(2,:) = [0 0.2]; 
+    epsilon(5,:) = [0 0.2];
+    epsilon(8,:) = [0 0.2];
+    %}
+    % line shifted case 2
+    %{
+    epsilon(4,:) = [0.2 0];
+    epsilon(5,:) = [0.2 0];
+    epsilon(6,:) = [0.2 0];
+    %}
+    % generic case
+    %{
+    epsilon(2,:) = [0.1 0.2];
+    epsilon(6,:) = [0.15 0.1];
+    epsilon(5,:) = epsilon(2,:) + epsilon(6,:);
+    epsilon(3,:) = [0.2 -0.3];
+    epsilon(4,:) = epsilon(3,:) + epsilon(5,:) - epsilon(2,:);
+    epsilon(7,:) = [-0.25 0.1];
+    epsilon(8,:) = epsilon(7,:) + epsilon(5,:) - epsilon(6,:);
+    epsilon(9,:) = epsilon(4,:) + epsilon(8,:) - epsilon(5,:);
+    %}
     x = [0 0;
          1 0;
          2 0;
          2 1;
-         1.1 1.2;
+         1 1;
          0 1;
          0 2;
          1 2;
          2 2];
+    x = x + epsilon;
     x = reshape(x',[],1);
     
     T = 1.3;
+    T = 1;
     reverse = 0;
 
     B = [1 2;
@@ -104,7 +140,7 @@ elseif test == 2 % 2x2 square lattice
     L_0 = periodicityMatrix(B_k, 9, 2);
 
 elseif test == 3 % rotating squares
-    reverse = 1;
+    reverse = 0;
     xi = 0.05*pi/4; % 0: fully closed, 1: fully open
     T = 0.511; % 1 GH mode at t=0.511669
     s = 0.5 / (cos(xi)+sin(xi)); % side length given |l_1| = 1
@@ -151,6 +187,7 @@ elseif test == 3 % rotating squares
     L_0 = periodicityMatrix(B_k, 12, 2);
 
 elseif test == 4 % twisted Kagome lattice
+    % twisted test 1
     %{
     x1 = [0; 0];
     x2 = [1; 0];
@@ -219,10 +256,10 @@ elseif test == 4 % twisted Kagome lattice
                                                      eye(2)  zeros(2, 2*20)];
     %}
     
+    % twisted test 2
     s = 1;
     theta = pi/2+0.99*pi/6;
     T = 1.4; % 1 GH mode at t=1.401481
-
     x1 = [0;0];
     x2 = x1+[s;0];
     x3 = x2+s*[cos(theta);-sin(theta)];
@@ -256,11 +293,11 @@ elseif test == 4 % twisted Kagome lattice
 elseif test == 5 % 2x2 Miura origami
     n = 2;
     shear = 0;
-    flattening = 0;
+    flattening = 1;
     vec = [[1; 0.2; 0], [1; -0.2; 0], [0; 1; 1], [0; 1; -1]]/2;
     [x,Pj,B,B_k] = parallelogramOrigami(n, vec); % standard Miura-ori axial shape change
-    if flattening, T = 0.346; % until flat state for flattening
-    else, T = 3.58; reverse = 0;
+    if flattening, reverse = 0; T = 0.31; % T = 0.346 until flat state for flattening
+    else, T = 0.4; reverse = 1;
     end
 
     if shear % Miura-ori shear (gamma = 0.5) shape change
@@ -279,7 +316,7 @@ elseif test == 5 % 2x2 Miura origami
     L = periodicityMatrix(B_k, 9, 3);
 
 elseif test == 6 % n by n parallelogram origami
-    n = 4;
+    n = 6;
     T = 0.5;
     reverse = 1;
     l1R = [1; 0; 0];
@@ -345,27 +382,34 @@ elseif test == 7 % eggbox
     L = periodicityMatrix(B_k, 9, 3);
 
 elseif test == 8 % Morph
-    T = 0.01;
+    T = 1;
+    reverse = 1; % 1: transition; 0: maintain M or E mode
+    %hybrid_state = "EEEEMMMM";
 
     % Miura: alpha + beta = pi; eggbox: beta = alpha;
     alpha = pi/3;
     beta = 4*pi/18;
-    beta = alpha;
-    phi = 5*pi/18;
-    
-    psi = acos(cos(2*alpha) + 2*(cos(beta) - cos(alpha)*cos(phi))^2/sin(phi)^2);
+    %beta = pi-alpha;
+ 
+    % Morph configurational space is fully described by:
+    % phi(0 <= psi <= psi_max = 2*beta < pi)
+    % psi(0 < phi_min = alpha - beta <= phi <= phi_max = alpha + beta < pi)
+    phi = 8*pi/18;
+    psi = acos(cos(2*alpha) + 2*(cos(beta) - cos(alpha)*cos(phi))^2/sin(phi)^2); 
+    disp("psi_max = "+rad2deg(2*beta))
+    disp("psi = "+rad2deg(psi))
+
     a = 1;
     c = 1;
     b = a*abs(cos(alpha)/cos(beta)); % orthorhombic Morph cell condition
     % Reference Fig. 2a of PP Pratapa, K. Liu, GH Paulino (2019)
-    L = sqrt(a^2+b^2-2*a*b*cos(phi));
-    W = 2*c*sin(psi/2);
-    %v1 = [0; a*cos(alpha)/cos(psi/2); a*sqrt(cos(psi/2)^2 - cos(alpha)^2)/cos(psi/2)]; % O1O2
-    v1 = [0; a*(a-b*cos(phi))/L; a*b*sin(phi)/L]; % O1O2
-    %v2 = [0; -b*cos(beta)/cos(psi/2); b*sqrt(cos(psi/2)^2 - cos(beta)^2)/cos(psi/2)]; % O2O3
-    v2 = [0; L-a*(a-b*cos(phi))/L; -a*b*sin(phi)/L]; % O1O2
-    v3 = [c*sin(psi/2); c*cos(psi/2); 0]; % O1O4
-    v4 = [c*sin(psi/2); -c*cos(psi/2); 0]; % O4O7
+    % L = sqrt(a^2+b^2-2*a*b*cos(phi));
+    % W = 2*c*sin(psi/2);
+
+    v1 = [a*sqrt(cos(psi/2)^2 - cos(alpha)^2)/cos(psi/2); 0; a*cos(alpha)/cos(psi/2)]; % O1O2
+    v2 = [b*sqrt(cos(psi/2)^2 - cos(beta)^2)/cos(psi/2); 0; -b*cos(beta)/cos(psi/2)]; % O2O3
+    v3 = [0; c*sin(psi/2); c*cos(psi/2)]; % O1O4
+    v4 = [0; c*sin(psi/2); -c*cos(psi/2)]; % O4O7
 
     x1 = [0; 0; 0];
     x2 = x1 + v1;
@@ -378,7 +422,7 @@ elseif test == 8 % Morph
     x9 = x4 + v4;    
     x = [x1; x2; x3; x4; x5; x6; x7; x8; x9];
     
-    vec = [[1; 0; 0.5], [1; 0; -0.5], [0; 1; 0.5], [0; 1; -0.5]]/2; % use eggbox topology
+    vec = [[1; 0; 0.5], [1; 0; -0.5], [0; 1; 0.5], [0; 1; -0.5]]/2; % WLOG use eggbox topology
     [~,Pj,B,B_k] = parallelogramOrigami(2, vec);
     L = periodicityMatrix(B_k, 9, 3);
 
@@ -399,8 +443,8 @@ else % 3D case (origami)
 
     N = null(L); % null space matrix for 3D unit cell, size 3I by N
     
-    % construct homogeneous strain matrix Y
-    Y = constructY(x, "translation");
+    % construct homogeneous strain matrix X
+    X = constructY(x, "translation");
     
     % compute initial moduli matrix C
     C_0 = membraneStiffness(x, Pj, L, 3, "translation");
@@ -411,15 +455,16 @@ end
 [V,D] = eig(C_0);
 [~,idx] = min(diag(D));
 e_0 = V(:,idx); % strain eigenvector with smallest eigenvalue
+s_0 = [1; 1; 0]; % initial homogeneous stretch tensor S = I in Voigt not.
 
 % Initialization checks
 fprintf("Initial C eigenvalues:\n");
 disp(eig(C_0))
 
-if test<5, K = barStiffness(x,B); GH0 = N'*K*N;
-else, [~,~,GH0] = membraneStiffness(x,Pj,L,3,"translation"); end
+if test<5, K_0 = barStiffness(x,B); GH_0 = N'*K_0*N;
+else, [~,~,GH_0] = membraneStiffness(x,Pj,L,3,"translation"); end
 fprintf("Initial GH matrix eigenvalues:\n");
-disp(eig(GH0))
+disp(eig(GH_0))
 
 % if trace of strain tensor < 0, flip e_0 to enforce expansion
 %if (e_0(1) + e_0(2)) < 0 || ~reverse
@@ -427,10 +472,42 @@ if reverse
     e_0 = -e_0;
 end
 
-state_0 = [e_0; x]; % e_0 = state_0(1:3), x = state_0(4:end)
-
+state_0 = [e_0; s_0; x]; % e_0 = state_0(1:3), s = state(4:6), x = state_0(7:end)
+% initial state variable checks
+%{
+e = e_0;
+y = x;
+[C,P] = effectiveC(y,X,N,B); % C is 3 by 3, P is 2I by 2I
+D = eig(C);
+lambda_min = min(D);
+u = P*X*e; % column vector length 2I or 3I (origami)
+[~, min_idx] = min(abs(e)); % component of e w/ smallest magnitude
+e_aux = zeros(3,1);
+e_aux(min_idx) = 1; % auxiliary vector along that axis
+v1 = cross(e, e_aux);
+v2 = cross(e, v1);
+v1 = v1 / norm(v1);
+v2 = v2/norm(v2);
+P_0 = [v1, v2]; % 3 by 2 orthonormal matrix
+C_0 = P_0'*(C - lambda_min*eye(3))*P_0; % 2 by 2 matrix
+Kdot = zeros(length(y));
+if test<5, chi = construct_chi2D(y);
+else, chi = construct_chi(y);
+end
+for b = 1:size(pars.B,1)
+    i = B(b,1);
+    j = B(b,2);
+    chi_ij = chi{i} - chi{j};
+    y_ij = chi_ij*y;
+    n = y_ij/norm(y_ij);
+    Pij = eye(length(n)) - n*n'; % dim by dim projector matrix
+    Kdot = Kdot + chi_ij'*(Pij*chi_ij*u/norm(y_ij)*n'+n*(Pij*chi_ij*u/norm(y_ij))')*chi_ij;
+end
+DuC = X'*P'*Kdot*P*X;
+f = -P_0*(C_0\P_0')*DuC*e;
+%}
 % parameters for ODE function
-if test<5, pars.X = X; else, pars.X = Y; end
+pars.X = X;
 pars.B = B;
 pars.N = N;
 
@@ -443,17 +520,24 @@ if test >= 5, pars.L = L; pars.Pj = Pj; pars.dim = 3; pars.group = "translation"
 
 %% Integrate the system
 
-options = odeset('Events', @(t,state) combinedEvents(t, state, pars));
-
+%options = odeset('Events', @(t,state) combinedEvents(t, state, pars));
+options = odeset('Events', @(t,state) GHEvent(t, state, pars), ...
+    'RelTol',1e-7, ...
+    'AbsTol',1e-9);
 [t,state,te,ye,ie] = ode45(@(t,state) mechanismODE(t,state,pars),...
                            [0,T],state_0,options);
 disp("Integration complete.")
 
+%% Post processing
+
 eigResidual = zeros(length(t),1);
 rayleighResidual = zeros(length(t),1);
 normResidual = zeros(length(t),1);
+eigResidual_eig = zeros(length(t),1);
+eVectorError = zeros(length(t),1);
 
 eigs = zeros(3,1,length(t));
+GH_eig = zeros(length(t),1);
 
 % mechanism animation
 figure
@@ -461,10 +545,21 @@ axis equal
 if test>4, view(3)
 end
 hold on
-frameDelay = 1/20; % 0.05 ~20 FPS
+frameDelay = 1/60; % 0.05 ~20 FPS
 for k = 1:length(t)
 
-    y = state(k,4:end)';
+    y = state(k,7:end)';
+    
+    
+    if test>1 && test<5
+    K = barStiffness(y,B);
+    GH_matrix = N'*K*N; % must be invertible; otherwise GH-mode is present
+    GH_matrix = (GH_matrix+GH_matrix')/2; % symmetricize
+    GH_matrix(abs(GH_matrix)<tol) = 0; % round off numerics
+    GH_eigs = eig(GH_matrix);
+    GH_eig(k) = min(GH_eigs);
+    end
+    
     if test < 5
         C = effectiveC(y,X,N,B);
     else
@@ -476,15 +571,25 @@ for k = 1:length(t)
     else,      Y = reshape(y,3,[])'; end
 
     cla
-    % monitor numerical drift
-    %{
-    C = effectiveC(y,X,N,B);
-    lambda_min = min(eig(C));
+
+    [V,D] = eig(C);
+    %lambda_min = min(eig(C));
     e = state(k,1:3)';
+    [lambda_min,idx] = min(diag(D));
+    
+    e_eig = V(:,idx);
+    
+    % Fix arbitrary sign of eig()
+    if dot(e,e_eig) < 0
+        e_eig = -e_eig;
+    end
+
     eigResidual(k) = norm(C*e - lambda_min*e);
     rayleighResidual(k) = abs(e'*C*e - lambda_min);
     normResidual(k) = abs(norm(e)-1);
-    %}
+    eigResidual_eig(k) = norm(C*e_eig - lambda_min*e_eig);
+    eVectorError(k) = norm(e-e_eig);
+    if plotMechanism
     for b = 1:size(B,1)
         i = B(b,1);
         j = B(b,2);
@@ -513,35 +618,11 @@ for k = 1:length(t)
              'FontSize', 10, 'FontWeight', 'bold', 'Color', 'k');
         end
     end
-    %{
-    % check strains
-    if mod(k,10) == 0
-    combos = B;
-    l0 = zeros(length(combos), 1);
-    l = zeros(length(combos), 1);
-    strains = zeros(length(combos), 1);
-    
-    % compute strains for each edge
-    for i = 1:length(combos)
-        x_a = [x(2*combos(i,1)-1), x(2*combos(i,1))]; % node 1 of the i-th edge
-        x_b = [x(2*combos(i,2)-1), x(2*combos(i,2))]; % node 2 of the i-th edge
-        l0(i) = norm(x_a - x_b); % reference configuration lengths
-        y_a = [y(2*combos(i,1)-1), y(2*combos(i,1))];
-        y_b = [y(2*combos(i,2)-1), y(2*combos(i,2))];
-        l(i) = norm(y_a - y_b); % deformed configuration lengths
-        strains(i) = (l(i) - l0(i))/l0(i); % resultant strains from the deformation
-    end
 
-    [max_val, max_idx] = max(abs(strains));
-    disp("Max strain: " + strains(max_idx) + " @ edge (" + combos(max_idx, 1) + ", " + combos(max_idx, 2) + ")")
-    disp("Average absolute strain: " + mean(abs(strains)))
-    disp("Total absolute strain: " + sum(abs(strains)))
-    end
-    %}
     title(sprintf('t = %.3f',t(k)));
     drawnow;
     pause(frameDelay);
-
+    end
 end
 hold off
 
@@ -555,7 +636,7 @@ for num_snapshot=0:4
     
     %if num_snapshot==3, k = k-floor(length(t)/8); end %
 
-    y = state(k,4:end)';
+    y = state(k,7:end)';
     snapshot_coords(:,num_snapshot+1) = y;
     if test<5, Y = reshape(y,2,[])';
     else,      Y = reshape(y,3,[])'; end
@@ -597,74 +678,134 @@ figure
 hold on
 plot(t, zero_mode, 'ko', 'MarkerFaceColor', 'k') 
 plot(t, soft_mode, 'bo', 'MarkerFaceColor', 'b')
-plot(t, stiff_mode, 'ro', 'MarkerFaceColor', 'r')
+%plot(t, stiff_mode, 'ro', 'MarkerFaceColor', 'r')
 xlabel("Time")
 ylabel("Principal Membrane Stiffness")
-legend(["Zero mode", "Soft mode", "Stiff mode"])
+%legend(["Zero mode", "Soft mode", "Stiff mode"])
+hold off
+
+figure
+hold on
+semilogy(t, GH_eig, 'ko', 'MarkerFaceColor', 'k')
+%title('2x2 Square Lattice GH Matrix Min Eigenvalue')
+xlabel("Time")
+ylabel("\lambda_m (N^T KN)")
+ylim([10^-3 1])
 hold off
 end
 
 % energy check
-if energyPlot && test < 5
+if energyPlot || strainPlot
+
     E = zeros(length(t),1);
-    X = reshape(x,2,[])';
+    strains = zeros(length(t), length(B));
+    total_abs_strains = zeros(length(t));
+
+    if test<5, X = reshape(x,2,[])';
+    else X = reshape(x,3,[])';
+    end
+
     for k=1:length(t)
         
-        y = state(k,4:end)';
-        Y = reshape(y,2,[])';
+        y = state(k,7:end)';
+        if test<5, Y = reshape(y,2,[])';
+        else Y = reshape(y,3,[])';
+        end
 
         for b = 1:size(B,1)
             i = B(b,1);
             j = B(b,2);
 
-            length_0 = norm(X(i,:)-X(j,:));
-            length = norm(Y(i,:)-Y(j,:));
-
-            E(k) = E(k) + 0.5*(length - length_0)^2;
+            l0 = norm(X(i,:)-X(j,:));
+            l = norm(Y(i,:)-Y(j,:));
+            strains(k,b) = (l - l0)/l0;
+            E(k) = E(k) + 0.5*(l - l0)^2;
         end
+        total_abs_strains(k) = sum(abs(strains(k,:)));
     end
+    if energyPlot
     figure
+    semilogy(t, E)
     hold on
-    plot(t, E)
     xlabel("Time")
     ylabel("Energy")
     hold off
+    end
+    if strainPlot
+    figure
+    semilogy(t, total_abs_strains)
+    hold on
+    xlabel("Time")
+    ylabel("Total absolute strain")
+    hold off
+    end
 end
+
 % residual check
-%{
+if residualCheck
 figure
 semilogy(t,eigResidual,'LineWidth',2)
 hold on
-semilogy(t,rayleighResidual,'LineWidth',2)
+%semilogy(t, eigResidual_eig, 'LineWidth',2);
+%semilogy(t, eVectorError, 'LineWidth',2);
+%semilogy(t,rayleighResidual,'LineWidth',2)
 semilogy(t,normResidual,'LineWidth',2)
+%title('2x2 Square Lattice Error')
 xlabel('Time')
 ylabel('Residual')
-legend('||Ce-\lambda e||','e^TCe-\lambda_{min}','||e||-1')
+ylim([10^-17 max(eigResidual)*10^2])
+legend('||Ce-\lambda e||','||e||-1')
+%  '||Ce_{eig}-\lambda e_{eig}||', 'e^TCe-\lambda_{min}', , '||e-e_{eig}||'
 grid on
+hold off
+end
+
+% homogeneous deformation tensor S check
+%{
+S_min_eig = zeros(length(t),1);
+for k = 1:length(t)
+    s = state(k,4:6)';
+    S = [s(1)   s(3)/2;
+         s(3)/2 s(2)];
+    S_min_eig(k) = min(eig(S));
+end
+figure
+hold on
+plot(t,S_min_eig,'LineWidth',2)
+xlabel('Time')
+ylabel('\lambda_{min}(S)')
+grid on
+hold off
 %}
+
+[C0,P0] = effectiveC(x,X,N,B);
 
 %% Functions
 
-% ODE function, returns [edot; ydot] = [g; u]
+% ODE function, returns [edot; sdot; ydot] = [g; e; u]
 function dq = mechanismODE(t,state,pars)
 
 e = state(1:3);
-y = state(4:end);
+s = state(4:6);
+y = state(7:end);
+
+e = e/norm(e);
 
 % compute initial moduli matrix C
 if pars.testNum < 5
     [C,P] = effectiveC(y,pars.X,pars.N,pars.B); % C is 3 by 3, P is 2I by 2I
-    X_current = pars.X; % constant
 else
     [C,P] = membraneStiffness(y, pars.Pj, pars.L, pars.dim, pars.group);
-    X_current = constructY(y,pars.group);
+    %X_current = constructY(y,pars.group);
 end
 % smallest eigenvalue
 D = eig(C);
 lambda_min = min(D);
 
 % compute displacement vector u = ydot
-u = P*X_current*e; % column vector length 2I or 3I (origami)
+u = P*pars.X*e; % column vector length 2I or 3I (origami)
+% store strain vector e
+sdot = e;
 
 % compute tangent space projector Ptilde
 [~, min_idx] = min(abs(e)); % component of e w/ smallest magnitude
@@ -683,23 +824,36 @@ if rcond(C_0) < 1e-12
     warning('Ill-conditioned tangent operator at t = %.6f\n', t)
 end
 % next the RHS for lam2, for which we first need DuC
-% compute directional derivative of C numerically using finite difference
-eps = 1e-6;
-if pars.testNum < 5
-    Cp = effectiveC(y + eps*u, pars.X, pars.N, pars.B);
-    Cm = effectiveC(y - eps*u, pars.X, pars.N, pars.B);
-else
-    Cp = membraneStiffness(y + eps*u, pars.Pj, pars.L, pars.dim, pars.group);
-    Cm = membraneStiffness(y - eps*u, pars.Pj, pars.L, pars.dim, pars.group);
+% compute derivative of C using derivative of K
+Kdot = zeros(length(y));% Eq. (80)
+if pars.testNum<5, chi = construct_chi2D(y);
+else, chi = construct_chi(y);
 end
-DuC = (Cp - Cm)/(2*eps); % central difference ~ O(eps^2)
-
+for b = 1:size(pars.B,1) % goes down the list of index pairs
+    i = pars.B(b,1); % first index
+    j = pars.B(b,2); % second index
+    chi_ij = chi{i} - chi{j};
+    y_ij = chi_ij*y;
+    n = y_ij/norm(y_ij);
+    Pij = eye(length(n)) - n*n'; % dim by dim projector matrix
+    Kdot = Kdot + chi_ij'*(Pij*chi_ij*u/norm(y_ij)*n'+n*(Pij*chi_ij*u/norm(y_ij))')*chi_ij;
+end
+DuC = pars.X'*P'*Kdot*P*pars.X;
 f = -P_0*(C_0\P_0')*DuC*e;
-dq = [f; u];
+
+%f_scale = floor(log10(norm(f))); % order of magnitude of f
+%gamma = 10^(f_scale); % damping factor
+%damping = gamma*(C*e - (e'*C*e)*e);
+%f = f-damping;
+
+dq = [f; sdot; u];
 
 end
 
 function K = barStiffness(y, B)
+
+    tol = 10^(-15);
+
     % construct chi_ij
     chi = construct_chi2D(y); % chi{i}*y = y_i
 
@@ -713,11 +867,14 @@ function K = barStiffness(y, B)
         n = y_ij/norm(y_ij);
         K = K + chi_ij'*(n*n')*chi_ij;
     end
+    
+    % clean K
+    K = (K+K')/2; % symmetricize
 end
 
 function [C,P] = effectiveC(y,X,N,B)
 
-    tol = 10^(-12);
+    tol = 10^(-15);
     
     % compute stiffness matrix K
     K = barStiffness(y,B);
@@ -725,21 +882,19 @@ function [C,P] = effectiveC(y,X,N,B)
     % compute projection matrix P
     GH_matrix = N'*K*N; % must be invertible; otherwise GH-mode is present
     GH_matrix = (GH_matrix+GH_matrix')/2; % symmetricize
-    GH_matrix(abs(GH_matrix)<tol) = 0; % round off numerics
-    %P = eye(length(y)) - N*((GH_matrix)\(N'*K)); % 2I by 2I matrix
-    P = eye(length(y)) - N*pinv(GH_matrix)*N'*K; % 2I by 2I matrix
+    P = eye(length(y)) - N*((GH_matrix)\(N'*K)); % 2I by 2I matrix
+    %P = eye(length(y)) - N*pinv(GH_matrix)*N'*K; % 2I by 2I matrix
     
     % compute moduli matrix C
     C = X'*P'*K*P*X; % 3 by 3 symmetric positive semi-definite matrix
     C = (C+C')/2; % symmetricize
-    C(abs(C)<tol) = 0; % round off numerics
 end
 
 function [value,isterminal,direction] = GHEvent(t,state,pars)
 
     tol = 10^(-12);
     
-    y = state(4:end);
+    y = state(7:end);
     
     if pars.testNum<5
         K = barStiffness(y,pars.B);
@@ -768,7 +923,8 @@ function [value, isterminal, direction] = PSDEvent(t, state, pars)
     tol = 10^(-12);
 
     e = state(1:3);
-    y = state(4:end);    
+    s = state(4:6);
+    y = state(7:end);    
 
     if pars.testNum < 5
 
@@ -779,14 +935,14 @@ function [value, isterminal, direction] = PSDEvent(t, state, pars)
 
         l1 = y(2*i1prime-1:2*i1prime) - y(2*i1-1:2*i1);
         l2 = y(2*i2prime-1:2*i2prime) - y(2*i2-1:2*i2);
-        U = [l1, l2] / pars.l_0;
-        value = det(U) - tol;
+        S = [l1, l2] / pars.l_0;
+        value = det(S) - tol;
 
     else
         
-        U = [e(1)   e(3)/2;
-             e(3)/2 e(2)];
-        value = det(U) - tol;
+        S = [s(1)   s(3)/2;
+             s(3)/2 s(2)];
+        value = min(eig(S)) - tol;
 
     end
     
