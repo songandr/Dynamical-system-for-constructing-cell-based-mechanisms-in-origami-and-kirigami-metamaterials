@@ -8,7 +8,7 @@
 % Under the Supervision of Dr. Paul Plucinsky
 % Viterbi School of Engineering, Unversity of Southern California 
 %
-% Updated Date: 08/31/26.
+% Updated Date: 09/25/26.
 %
 % These tests are interested in the mechanism motion of:
 % 1. a 4 bar quad unit cell (1 DoF mechanism)
@@ -26,17 +26,17 @@ clear
 clc
 cla
 
-% User-defined inputs
+%% User-defined inputs
 tol = 10^(-15);
 plotMechanism = 1; % for mechanism animation
-tessellate = 0; % 2x2 unit cell tessellation for plotting
-snapshotPlots = 0;
-eigPlot = 1;
-energyPlot = 1;
-strainPlot = 0;
-residualCheck = 1;
+tessellate = 1; % 2x2 unit cell tessellation for plotting
+snapshotPlots = 1; % for mechanism snapshot plotting
+eigPlot = 1; % for elastic moduli eigenvalue plotting
+energyPlot = 0; % for energy accrual plotting
+strainPlot = 0; % for strain accrual plotting
+residualCheck = 1; % for residual error plotting
 reverse = 0; % default setting; some tests flip initial eigenvector sign for desired mechanism motion
-test = 1; % 1: 1x1 square lattice (simplest mechanism test)
+test = 8; % 1: 1x1 square lattice (simplest mechanism test)
           % 2: 2x2 quad lattice (dynamics can't run unless perturbed center)
           % 3: 2x2 rotating squares (kirigami mechanism test)
           % 4: 1x1 twisted Kagome lattice (GH mode at most open state)
@@ -44,7 +44,8 @@ test = 1; % 1: 1x1 square lattice (simplest mechanism test)
           % 6: nxn parallelogram origami (general quad origami)
           % 7: eggbox origami
           % 8: "Morph" origami
-    
+
+%% Reference State Initialization
 % x is the IC of y, a column vector of length 2I holding nodal positions
 if test == 1 % 1x1 square lattice
     reverse = 1;
@@ -113,7 +114,6 @@ elseif test == 2 % 2x2 square lattice
     x = x + epsilon;
     x = reshape(x',[],1);
     
-    T = 1.3;
     T = 1;
     reverse = 0;
 
@@ -384,7 +384,6 @@ elseif test == 7 % eggbox
 elseif test == 8 % Morph
     T = 1;
     reverse = 1; % 1: transition; 0: maintain M or E mode
-    %hybrid_state = "EEEEMMMM";
 
     % Miura: alpha + beta = pi; eggbox: beta = alpha;
     alpha = pi/3;
@@ -396,8 +395,8 @@ elseif test == 8 % Morph
     % psi(0 < phi_min = alpha - beta <= phi <= phi_max = alpha + beta < pi)
     phi = 8*pi/18;
     psi = acos(cos(2*alpha) + 2*(cos(beta) - cos(alpha)*cos(phi))^2/sin(phi)^2); 
-    disp("psi_max = "+rad2deg(2*beta))
-    disp("psi = "+rad2deg(psi))
+    %disp("psi_max = "+rad2deg(2*beta))
+    %disp("psi = "+rad2deg(psi))
 
     a = 1;
     c = 1;
@@ -433,8 +432,8 @@ if test < 5 % 2D case
     
     N = null(L_0); % null space matrix, size 2I by N where N = 2I-2(|B1|+|B2|+1)
 
-    % construct homogeneous strain matrix X
-    X = constructX(x);
+    % construct homogeneous strain matrix X; see Eq. 7
+    X = constructX(x, 2);
     
     % compute initial moduli matrix C
     C_0 = effectiveC(x,X,N,B); % C is 3 by 3, P is 2I by 2I
@@ -443,11 +442,12 @@ else % 3D case (origami)
 
     N = null(L); % null space matrix for 3D unit cell, size 3I by N
     
-    % construct homogeneous strain matrix X
-    X = constructY(x, "translation");
-    
+    % construct homogeneous strain matrix X_3D; see Eq. A13
+    X_3D = constructX(x, 3);
+    X = X_3D(:,1:end-1); % X is 3I by 3, obtained from X_3D by eliminating 4th column
+
     % compute initial moduli matrix C
-    C_0 = membraneStiffness(x, Pj, L, 3, "translation");
+    C_0 = origamiMembraneStiffness(x, Pj, L, X);
 
 end
 
@@ -462,7 +462,7 @@ fprintf("Initial C eigenvalues:\n");
 disp(eig(C_0))
 
 if test<5, K_0 = barStiffness(x,B); GH_0 = N'*K_0*N;
-else, [~,~,GH_0] = membraneStiffness(x,Pj,L,3,"translation"); end
+else, [~,~,GH_0] = origamiMembraneStiffness(x,Pj,L,X); end
 fprintf("Initial GH matrix eigenvalues:\n");
 disp(eig(GH_0))
 
@@ -516,7 +516,8 @@ if test == 1, pars.l_0 = [x(3:4), x(7:8)]; pars.boundary_pairs = [1 2; 1 4]; end
 if test == 2, pars.l_0 = [x(5:6), x(13:14)]; pars.boundary_pairs = [1 3; 1 7]; end
 if test == 3, pars.l_0 = [x(9:10), x(19:20)-x(3:4)]; pars.boundary_pairs = [1 5; 2 10]; end
 if test == 4, pars.l_0 = [x(5:6), x(11:12)]; pars.boundary_pairs = [1 3; 1 6]; end
-if test >= 5, pars.L = L; pars.Pj = Pj; pars.dim = 3; pars.group = "translation"; end
+if test >= 5, pars.L = L; pars.Pj = Pj; end
+if test == 8, pars.boundary_pairs = [1 3; 1 7]; end
 
 %% Integrate the system
 
@@ -545,11 +546,10 @@ axis equal
 if test>4, view(3)
 end
 hold on
-frameDelay = 1/60; % 0.05 ~20 FPS
+frameDelay = 1/120; % defined as 1/FPS
 for k = 1:length(t)
 
     y = state(k,7:end)';
-    
     
     if test>1 && test<5
     K = barStiffness(y,B);
@@ -563,7 +563,7 @@ for k = 1:length(t)
     if test < 5
         C = effectiveC(y,X,N,B);
     else
-        C = membraneStiffness(y, Pj, L, pars.dim, pars.group);
+        C = origamiMembraneStiffness(y,Pj,L,X);
     end
     eigs(:,:,k) = eig(C);
 
@@ -605,7 +605,19 @@ for k = 1:length(t)
                 plot(Y([i j],1)+l2_1,Y([i j],2)+l2_2,'b-','LineWidth',2); % top tessellation
                 plot(Y([i j],1)+l1_1+l2_1,Y([i j],2)+l1_2+l2_2,'b-','LineWidth',2); % diagonal tessellation           
             end
-        else, plot3(Y([i j],1),Y([i j],2), Y([i j],3),'b-','LineWidth',2); end
+        else
+            plot3(Y([i j],1),Y([i j],2), Y([i j],3),'b-','LineWidth',2);
+            if tessellate
+                l1_1 = Y(pars.boundary_pairs(1,2),1)-Y(pars.boundary_pairs(1,1),1);
+                l1_2 = Y(pars.boundary_pairs(1,2),2)-Y(pars.boundary_pairs(1,1),2);
+                l2_1 = Y(pars.boundary_pairs(2,2),1)-Y(pars.boundary_pairs(2,1),1);
+                l2_2 = Y(pars.boundary_pairs(2,2),2)-Y(pars.boundary_pairs(2,1),2);
+                
+                plot3(Y([i j],1)+l1_1,Y([i j],2)+l1_2, Y([i j],3),'b-','LineWidth',2); % right tessellation
+                plot3(Y([i j],1)+l2_1,Y([i j],2)+l2_2, Y([i j],3),'b-','LineWidth',2); % top tessellation
+                plot3(Y([i j],1)+l1_1+l2_1,Y([i j],2)+l1_2+l2_2,Y([i j],3),'b-','LineWidth',2); % diagonal tessellation           
+            end
+        end
     end
     
     if test<5, plot(Y(:,1),Y(:,2),'ro','MarkerFaceColor','r');
@@ -778,7 +790,7 @@ grid on
 hold off
 %}
 
-[C0,P0] = effectiveC(x,X,N,B);
+%[C0,P0] = effectiveC(x,X,N,B);
 
 %% Functions
 
@@ -789,21 +801,20 @@ e = state(1:3);
 s = state(4:6);
 y = state(7:end);
 
-e = e/norm(e);
-
 % compute initial moduli matrix C
 if pars.testNum < 5
     [C,P] = effectiveC(y,pars.X,pars.N,pars.B); % C is 3 by 3, P is 2I by 2I
 else
-    [C,P] = membraneStiffness(y, pars.Pj, pars.L, pars.dim, pars.group);
-    %X_current = constructY(y,pars.group);
+    [C,P] = origamiMembraneStiffness(y, pars.Pj, pars.L, pars.X);
 end
+
 % smallest eigenvalue
 D = eig(C);
 lambda_min = min(D);
 
 % compute displacement vector u = ydot
 u = P*pars.X*e; % column vector length 2I or 3I (origami)
+
 % store strain vector e
 sdot = e;
 
@@ -823,37 +834,71 @@ C_0 = P_0'*(C - lambda_min*eye(3))*P_0; % 2 by 2 matrix
 if rcond(C_0) < 1e-12
     warning('Ill-conditioned tangent operator at t = %.6f\n', t)
 end
+
 % next the RHS for lam2, for which we first need DuC
 % compute derivative of C using derivative of K
 Kdot = zeros(length(y));% Eq. (80)
-if pars.testNum<5, chi = construct_chi2D(y);
-else, chi = construct_chi(y);
+if pars.testNum<5 % planar bar cases
+    chi = construct_chi2D(y);
+    for b = 1:size(pars.B,1) % goes down the list of index pairs
+        i = pars.B(b,1); % first index
+        j = pars.B(b,2); % second index
+        chi_ij = chi{i} - chi{j};
+        y_ij = chi_ij*y;
+        n = y_ij/norm(y_ij);
+        Pij = eye(length(n)) - n*n'; % dim by dim projector matrix
+        Kdot = Kdot + chi_ij'*(Pij*chi_ij*u/norm(y_ij)*n'+n*(Pij*chi_ij*u/norm(y_ij))')*chi_ij;
+    end
+else % 3D origami cases
+    chi = construct_chi(y);
+
+    for j = 1:length(pars.Pj)
+        % initialize the tensors dependent on j
+        Kj = zeros(3); % 3 by 3 matrix
+        Tj = zeros(3, length(y)); % 3 by 3I matrix
+        Kjdot = zeros(3); % 3 by 3 matrix
+        Tjdot = zeros(3, length(y)); % 3 by 3I matrix
+
+        num_Pj = length(pars.Pj{j}); % number of vertices in the j-th panel
+        chi_avg = (1/num_Pj)*calcMatrixSum_y(chi, pars.Pj{j});
+        for i = 1:num_Pj
+            k = pars.Pj{j}(i); % vertex k
+
+            chi_ij = chi{k} - chi_avg; % j dependency encoded in chi_avg
+
+            y_ij = chi_ij*y;
+            y_ijcross = [0       -y_ij(3)   y_ij(2);
+                         y_ij(3)  0        -y_ij(1);
+                        -y_ij(2)  y_ij(1)   0];
+
+            u_ij = chi_ij*u;
+            u_ijcross = [0       -u_ij(3)   u_ij(2);
+                         u_ij(3)  0        -u_ij(1);
+                        -u_ij(2)  u_ij(1)   0];
+
+            Kj = Kj + y_ijcross'*y_ijcross;
+            Tj = Tj + y_ijcross'*chi_ij;
+            Kjdot = Kjdot + u_ijcross'*y_ijcross + y_ijcross'*u_ijcross;
+            Tjdot = Tjdot + u_ijcross'*chi_ij;
+        end
+        % symmetricize
+        Kj = (Kj+Kj')/2;
+        Kjdot = (Kjdot+Kjdot')/2;
+
+        Kdot = Kdot + (Tj'*(Kj\Kjdot)*(Kj\Tj) - Tjdot'*(Kj\Tj) - Tj'*(Kj\Tjdot));    
+    end
+
+    Kdot = 2*Kdot;
 end
-for b = 1:size(pars.B,1) % goes down the list of index pairs
-    i = pars.B(b,1); % first index
-    j = pars.B(b,2); % second index
-    chi_ij = chi{i} - chi{j};
-    y_ij = chi_ij*y;
-    n = y_ij/norm(y_ij);
-    Pij = eye(length(n)) - n*n'; % dim by dim projector matrix
-    Kdot = Kdot + chi_ij'*(Pij*chi_ij*u/norm(y_ij)*n'+n*(Pij*chi_ij*u/norm(y_ij))')*chi_ij;
-end
+
 DuC = pars.X'*P'*Kdot*P*pars.X;
 f = -P_0*(C_0\P_0')*DuC*e;
-
-%f_scale = floor(log10(norm(f))); % order of magnitude of f
-%gamma = 10^(f_scale); % damping factor
-%damping = gamma*(C*e - (e'*C*e)*e);
-%f = f-damping;
 
 dq = [f; sdot; u];
 
 end
 
 function K = barStiffness(y, B)
-
-    tol = 10^(-15);
-
     % construct chi_ij
     chi = construct_chi2D(y); % chi{i}*y = y_i
 
@@ -872,10 +917,7 @@ function K = barStiffness(y, B)
     K = (K+K')/2; % symmetricize
 end
 
-function [C,P] = effectiveC(y,X,N,B)
-
-    tol = 10^(-15);
-    
+function [C,P] = effectiveC(y,X,N,B)    
     % compute stiffness matrix K
     K = barStiffness(y,B);
     
@@ -901,7 +943,7 @@ function [value,isterminal,direction] = GHEvent(t,state,pars)
         GH = pars.N'*K*pars.N;
         GH = (GH+GH')/2; % symmetricize
         GH(abs(GH)<tol) = 0; % round off numerics
-    else, [~,~,GH] = membraneStiffness(y,pars.Pj,pars.L,pars.dim,pars.group);
+    else, [~,~,GH] = origamiMembraneStiffness(y,pars.Pj,pars.L,pars.X);
     end
     
     eigs = eig(GH);
@@ -922,7 +964,6 @@ function [value, isterminal, direction] = PSDEvent(t, state, pars)
 
     tol = 10^(-12);
 
-    e = state(1:3);
     s = state(4:6);
     y = state(7:end);    
 
@@ -940,8 +981,9 @@ function [value, isterminal, direction] = PSDEvent(t, state, pars)
 
     else
         
-        S = [s(1)   s(3)/2;
-             s(3)/2 s(2)];
+        S = [s(1)   s(3)/2  0;
+             s(3)/2 s(2)    0;
+             0      0       1];
         value = min(eig(S)) - tol;
 
     end
