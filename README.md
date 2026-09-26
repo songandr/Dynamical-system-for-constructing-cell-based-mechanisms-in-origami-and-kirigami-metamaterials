@@ -46,11 +46,11 @@ To run the program:
      for 3D structures.
    - Mapping matrix $X$ or $Y$ using
      ```matlab
-     X = constructX(x);
+     X = constructX(x,2);
      ```
      for 2D structures or
      ```matlab
-     Y = constructY(x,"group");
+     X_3D = constructX(x,3);
      ```
      for 3D structures.
    - Initial stiffness tensor $C_0$ using
@@ -59,7 +59,7 @@ To run the program:
      ```
      for rigid bar structures or
      ```matlab
-     C_0 = membraneStiffness(x,Pj,L,dim,"group")
+     C_0 = origamiMembraneStiffness(x,Pj,L,X);
      ```
      for rigid panel structures.
 3. Check initialization:
@@ -71,21 +71,21 @@ To run the program:
      ```
      for rigid bar structures or
      ```matlab
-     [~,~,GH0] = membraneStiffness(x,Pj,L,dim,"group")
+     [~,~,GH0] = origamiMembraneStiffness(x,Pj,L,X);
      ```
-     for rigid panel structures. If there is a zero eigenvalue you must choose a different initialization.
+     for rigid panel structures. If there is a zero eigenvalue you must choose a different initialization (and break symmetries).
 4. Prepare to integrate:
    - Use
      ```matlab
-     state_0 = [e_0; x]
+     state_0 = [e_0; s_0; x];
      ```
      and pass the parameters
      ```matlab
-     pars.B = B; pars.N = N
+     pars.X = X; pars.B = B; pars.N = N;
      ```
      and for rigid bar structures:
      ```matlab
-     pars.X = X, pars.l_0 = [l_1, l_2]
+     , pars.l_0 = [l_1, l_2]
      ```
      for lattice vectors $\mathbf{l}_k$, and
      ```matlab
@@ -93,7 +93,7 @@ To run the program:
      ```
      which indicate the corresponding node indices to the lattice vectors defined for pars.l_0. For rigid panel structures, instead pass:
      ```matlab
-     pars.X = Y; pars.L = L; pars.Pj = Pj; pars.dim = dim; pars.group = "group"
+     pars.L = L; pars.Pj = Pj;
      ```
 5. Integrate by calling:
    ```matlab
